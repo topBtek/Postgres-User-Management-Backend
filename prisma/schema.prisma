@@ -1,0 +1,95 @@
+// Prisma schema for Supabase-style user management
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Main user table (similar to Supabase auth.users but in public schema)
+model User {
+  id          String   @id @default(uuid()) @db.Uuid
+  email       String   @unique @db.VarChar(255)
+  passwordHash String? @map("password_hash") @db.VarChar(255)
+  confirmedAt DateTime? @map("confirmed_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  userMetadata Json?   @map("user_metadata") @db.JsonB
+  role        String   @default("user") @db.VarChar(50)
+  isActive    Boolean  @default(true) @map("is_active")
+
+  // Relations
+  identities  Identity[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+  @@index([email])
+  @@index([role])
+}
+
+// Identity table (for multiple auth providers - email/password, OAuth, etc.)
+model Identity {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  provider     String   @db.VarChar(50) // 'email', 'google', 'github', etc.
+  providerId   String?  @map("provider_id") @db.VarChar(255) // External provider user ID
+  identityData Json?    @map("identity_data") @db.JsonB // Provider-specific data
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@map("identities")
+  @@index([userId])
+  @@index([provider])
+}
+
+// Refresh tokens table for token management
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique @db.Text
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// Password reset tokens
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique @db.Text
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("password_reset_tokens")
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// Email verification tokens
+model EmailVerificationToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique @db.Text
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("email_verification_tokens")
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
